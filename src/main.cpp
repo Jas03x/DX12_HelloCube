@@ -276,7 +276,7 @@ BOOL Run(VOID)
 
 	while (Window::Open())
 	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE) != 0)
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE) != FALSE)
 		{
 			TranslateMessage(&msg);
 			DispatchMessageA(&msg);
