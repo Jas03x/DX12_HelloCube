@@ -427,6 +427,7 @@ namespace Renderer
 		BOOL Status = TRUE;
 		UINT uIndex = 0;
 		IDXGIAdapter4* pIAdapter = NULL;
+		INT AdapterIndex = -1;
 
 		while (Status == TRUE)
 		{
@@ -448,19 +449,27 @@ namespace Renderer
 
 				if (Status == TRUE)
 				{
-					if (uIndex == 0)
+					if (AdapterIndex == -1)
 					{
-						pIDxgiAdapter = pIAdapter;
+						// Check if the adapter supports D3D12 - the result is S_FALSE if the function succeeds but ppDevice is NULL
+						if (D3D12CreateDevice(pIAdapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), NULL) == S_FALSE)
+						{
+							AdapterIndex = uIndex;
+							pIDxgiAdapter = pIAdapter;
+						}
 					}
-					else
-					{
-						pIAdapter->Release();
-					}
+				}
+
+				if (pIAdapter != pIDxgiAdapter)
+				{
+					pIAdapter->Release();
 				}
 
 				uIndex++;
 			}
 		}
+
+		Console::Write("Using adapter %u\n", AdapterIndex);
 
 		return Status;
 	}
