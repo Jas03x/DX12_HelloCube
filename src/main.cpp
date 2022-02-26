@@ -254,6 +254,7 @@ namespace Renderer
 	ID3D12Debug*   pIDebugInterface = NULL;
 	IDXGIFactory6* pIDxgiFactory = NULL;
 	IDXGIAdapter4* pIDxgiAdapter = NULL;
+	ID3D12Device*  pID3D12Device = NULL;
 
 	BOOL           EnumerateDxgiAdapters(VOID);
 
@@ -291,11 +292,28 @@ namespace Renderer
 			}
 		}
 
+		if (Status == TRUE)
+		{
+			D3D12CreateDevice(pIDxgiAdapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), reinterpret_cast<void**>(&pID3D12Device));
+
+			if (pID3D12Device == NULL)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not create a DX12 device\n");
+			}
+		}
+
 		return Status;
 	}
 
 	VOID Uninitialize(VOID)
 	{
+		if (pID3D12Device != NULL)
+		{
+			pID3D12Device->Release();
+			pID3D12Device = NULL;
+		}
+
 		if (pIDxgiAdapter != NULL)
 		{
 			pIDxgiAdapter->Release();
