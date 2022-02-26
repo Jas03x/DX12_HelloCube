@@ -2,6 +2,11 @@
 #include <Strsafe.h>
 #include <Windows.h>
 
+#include <dxgi1_6.h>
+#include <d3d12sdklayers.h>
+
+#include <cmath>
+
 LPCSTR CLASS_NAME  = "DX12HelloCube";
 LPCSTR WINDOW_NAME = "DX12 - Hello Cube";
 
@@ -201,6 +206,12 @@ namespace Window
 
 	VOID Uninitialize(VOID)
 	{
+		if (hWnd != NULL)
+		{
+			DestroyWindow(hWnd);
+			hWnd = NULL;
+		}
+
 		UnregisterClass(CLASS_NAME, hInstance);
 	}
 
@@ -238,6 +249,223 @@ namespace Window
 	}
 }
 
+namespace Renderer
+{
+	ID3D12Debug*   pIDebugInterface = NULL;
+	IDXGIFactory6* pIDxgiFactory = NULL;
+	IDXGIAdapter4* pIDxgiAdapter = NULL;
+
+	BOOL           EnumerateDxgiAdapters(VOID);
+
+	BOOL Initialize(VOID)
+	{
+		BOOL Status = TRUE;
+
+		if (D3D12GetDebugInterface(__uuidof(ID3D12Debug), reinterpret_cast<void**>(&pIDebugInterface)) == S_OK)
+		{
+			pIDebugInterface->EnableDebugLayer();
+		}
+		else
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to get debug interface\n");
+		}
+
+		if (Status == TRUE)
+		{
+			if (CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(IDXGIFactory6), reinterpret_cast<void**>(&pIDxgiFactory)) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to create dxgi factory\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			Status = EnumerateDxgiAdapters();
+
+			if (Status == FALSE)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not get dxgi adapter\n");
+			}
+		}
+
+		return Status;
+	}
+
+	VOID Uninitialize(VOID)
+	{
+		if (pIDxgiAdapter != NULL)
+		{
+			pIDxgiAdapter->Release();
+			pIDxgiAdapter = NULL;
+		}
+
+		if (pIDxgiFactory != NULL)
+		{
+			pIDxgiFactory->Release();
+			pIDxgiFactory = NULL;
+		}
+
+		if (pIDebugInterface != NULL)
+		{
+			pIDebugInterface->Release();
+			pIDebugInterface = NULL;
+		}
+	}
+
+	BOOL PrintAdapterDesc(UINT uIndex, IDXGIAdapter4* pIAdapter)
+	{
+		BOOL Status = TRUE;
+		DXGI_ADAPTER_DESC3 Desc = { 0 };
+
+		if (pIAdapter->GetDesc3(&Desc) == S_OK)
+		{
+			CONST FLOAT GB = 1024.0f * 1024.0f * 1024.0f;
+
+			Console::Write("Adapter %u:\n", uIndex);
+			Console::Write("\tDescription: %S\n", Desc.Description);
+			Console::Write("\tVendorId: %X\n", Desc.VendorId);
+			Console::Write("\tDeviceId: %X\n", Desc.DeviceId);
+			Console::Write("\tsubSysId: %X\n", Desc.SubSysId);
+			Console::Write("\tRevision: %X\n", Desc.Revision);
+			Console::Write("\tDedicatedVideoMemory: %.0f GB\n", ceilf(static_cast<double>(Desc.DedicatedVideoMemory) / GB));
+			Console::Write("\tDedicatedSystemMemory: %.0f GB\n", ceilf(static_cast<double>(Desc.DedicatedSystemMemory) / GB));
+			Console::Write("\tSharedSystemMemory: %.0f GB\n", ceilf(static_cast<double>(Desc.SharedSystemMemory) / GB));
+
+			if (Desc.Flags != DXGI_ADAPTER_FLAG3_NONE)
+			{
+				Console::Write("\tFlags:\n");
+
+				if ((Desc.Flags & DXGI_ADAPTER_FLAG3_REMOTE) != 0)
+				{
+					Console::Write("\t\tRemote\n");
+				}
+
+				if ((Desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE) != 0)
+				{
+					Console::Write("\t\tSoftware\n");
+				}
+
+				if ((Desc.Flags & DXGI_ADAPTER_FLAG3_ACG_COMPATIBLE) != 0)
+				{
+					Console::Write("\t\tACG_Compatible\n");
+				}
+
+				if ((Desc.Flags & DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES) != 0)
+				{
+					Console::Write("\t\tSupport_Monitored_Fences\n");
+				}
+
+				if ((Desc.Flags & DXGI_ADAPTER_FLAG3_SUPPORT_NON_MONITORED_FENCES) != 0)
+				{
+					Console::Write("\t\tSupport_Non_Monitored_Fences\n");
+				}
+
+				if ((Desc.Flags & DXGI_ADAPTER_FLAG3_KEYED_MUTEX_CONFORMANCE) != 0)
+				{
+					Console::Write("\t\tKeyed_Mutex_Conformance\n");
+				}
+			}
+
+			LPCCH GraphicsPreemptionGranularity = "Unknown";
+			LPCCH ComputePreemptionGranularity = "Unknown";
+
+			switch (Desc.GraphicsPreemptionGranularity)
+			{
+			case DXGI_GRAPHICS_PREEMPTION_DMA_BUFFER_BOUNDARY:
+				GraphicsPreemptionGranularity = "Dma_Buffer_Boundary";
+				break;
+			case DXGI_GRAPHICS_PREEMPTION_PRIMITIVE_BOUNDARY:
+				GraphicsPreemptionGranularity = "Primitive_Boundary";
+				break;
+			case DXGI_GRAPHICS_PREEMPTION_TRIANGLE_BOUNDARY:
+				GraphicsPreemptionGranularity = "Triangle_Boundary";
+				break;
+			case DXGI_GRAPHICS_PREEMPTION_PIXEL_BOUNDARY:
+				GraphicsPreemptionGranularity = "Pixel_Boundary";
+				break;
+			case DXGI_GRAPHICS_PREEMPTION_INSTRUCTION_BOUNDARY:
+				GraphicsPreemptionGranularity = "Instruction_Boundary";
+				break;
+			}
+
+			switch (Desc.ComputePreemptionGranularity)
+			{
+			case DXGI_COMPUTE_PREEMPTION_DMA_BUFFER_BOUNDARY:
+				ComputePreemptionGranularity = "Dma_Buffer_Boundary";
+				break;
+			case DXGI_COMPUTE_PREEMPTION_DISPATCH_BOUNDARY:
+				ComputePreemptionGranularity = "Dispatch_Boundary";
+				break;
+			case DXGI_COMPUTE_PREEMPTION_THREAD_GROUP_BOUNDARY:
+				ComputePreemptionGranularity = "Thread_Group_Boundary";
+				break;
+			case DXGI_COMPUTE_PREEMPTION_THREAD_BOUNDARY:
+				ComputePreemptionGranularity = "Thread_Boundary";
+				break;
+			case DXGI_COMPUTE_PREEMPTION_INSTRUCTION_BOUNDARY:
+				ComputePreemptionGranularity = "Instruction_Boundary";
+				break;
+			}
+
+			Console::Write("\tGraphicsPreemptionBoundary: %s\n", GraphicsPreemptionGranularity);
+			Console::Write("\tComputePreemptionGranularity: %s\n", ComputePreemptionGranularity);
+		}
+		else
+		{
+			Status = FALSE;
+			Console::Write("Error: Could not get description for adapter %u\n", uIndex);
+		}
+
+		return Status;
+	}
+
+	BOOL EnumerateDxgiAdapters(VOID)
+	{
+		BOOL Status = TRUE;
+		UINT uIndex = 0;
+		IDXGIAdapter4* pIAdapter = NULL;
+
+		while (Status == TRUE)
+		{
+			HRESULT result = pIDxgiFactory->EnumAdapterByGpuPreference(uIndex, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, __uuidof(IDXGIAdapter4), reinterpret_cast<void**>(&pIAdapter));
+
+			if (result == DXGI_ERROR_NOT_FOUND)
+			{
+				break;
+			}
+			else if (result != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not enumerate adapters\n");
+				break;
+			}
+			else
+			{
+				Status = PrintAdapterDesc(uIndex, pIAdapter);
+
+				if (Status == TRUE)
+				{
+					if (uIndex == 0)
+					{
+						pIDxgiAdapter = pIAdapter;
+					}
+					else
+					{
+						pIAdapter->Release();
+					}
+				}
+
+				uIndex++;
+			}
+		}
+
+		return Status;
+	}
+}
+
 BOOL Initialize(VOID)
 {
 	BOOL Status = TRUE;
@@ -257,11 +485,18 @@ BOOL Initialize(VOID)
 		Status = Window::Initialize();
 	}
 
+	if (Status == TRUE)
+	{
+		Status = Renderer::Initialize();
+	}
+
 	return Status;
 }
 
 VOID Uninitialize(VOID)
 {
+	Renderer::Uninitialize();
+
 	Window::Uninitialize();
 
 	Console::Uninitialize();
@@ -308,5 +543,5 @@ INT main(INT ArgC, CHAR* ArgV[])
 
 	Uninitialize();
 
-	return 0;
+	return Status == TRUE ? 0 : -1;
 }
