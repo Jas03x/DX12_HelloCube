@@ -215,6 +215,11 @@ namespace Window
 		UnregisterClass(CLASS_NAME, hInstance);
 	}
 
+	HWND GetHandle()
+	{
+		return hWnd;
+	}
+
 	BOOL Open(VOID)
 	{
 		return bOpen;
@@ -251,12 +256,20 @@ namespace Window
 
 namespace Renderer
 {
-	ID3D12Debug*   pIDebugInterface = NULL;
-	IDXGIFactory6* pIDxgiFactory = NULL;
-	IDXGIAdapter4* pIDxgiAdapter = NULL;
-	ID3D12Device*  pID3D12Device = NULL;
+	CONST UINT            NumBuffers = 2;
 
-	BOOL           EnumerateDxgiAdapters(VOID);
+	ID3D12Debug*		  pIDebugInterface = NULL;
+	IDXGIFactory7*		  pIDxgiFactory = NULL;
+	IDXGIAdapter4*		  pIDxgiAdapter = NULL;
+	ID3D12Device*		  pIDevice = NULL;
+	ID3D12CommandQueue*   pICommandQueue = NULL;
+	IDXGISwapChain4*	  pISwapChain = NULL;
+	ID3D12DescriptorHeap* pIDescriptorHeap = NULL;
+	ID3D12Resource*		  pIRenderBuffers[NumBuffers] = { NULL, NULL };
+
+	UINT				  DescriptorIncrement = 0;
+
+	BOOL				  EnumerateDxgiAdapters(VOID);
 
 	BOOL Initialize(VOID)
 	{
@@ -274,7 +287,7 @@ namespace Renderer
 
 		if (Status == TRUE)
 		{
-			if (CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(IDXGIFactory6), reinterpret_cast<void**>(&pIDxgiFactory)) != S_OK)
+			if (CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(IDXGIFactory7), reinterpret_cast<void**>(&pIDxgiFactory)) != S_OK)
 			{
 				Status = FALSE;
 				Console::Write("Error: Failed to create dxgi factory\n");
@@ -294,12 +307,95 @@ namespace Renderer
 
 		if (Status == TRUE)
 		{
-			D3D12CreateDevice(pIDxgiAdapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), reinterpret_cast<void**>(&pID3D12Device));
+			D3D12CreateDevice(pIDxgiAdapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), reinterpret_cast<void**>(&pIDevice));
 
-			if (pID3D12Device == NULL)
+			if (pIDevice == NULL)
 			{
 				Status = FALSE;
 				Console::Write("Error: Could not create a DX12 device\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = { };
+			cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+			cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+			cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+			cmdQueueDesc.NodeMask = 0;
+
+			if (pIDevice->CreateCommandQueue(&cmdQueueDesc, __uuidof(ID3D12CommandQueue), reinterpret_cast<void**>(&pICommandQueue)) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to create command queue\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			DXGI_SWAP_CHAIN_DESC1 swapChainDesc = { };
+			swapChainDesc.Width = WINDOW_WIDTH;
+			swapChainDesc.Height = WINDOW_HEIGHT;
+			swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			swapChainDesc.Stereo = FALSE;
+			swapChainDesc.SampleDesc.Count = 1;
+			swapChainDesc.SampleDesc.Quality = 0;
+			swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+			swapChainDesc.BufferCount = NumBuffers;
+			swapChainDesc.Scaling = DXGI_SCALING_NONE;
+			swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+			swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+			swapChainDesc.Flags = 0;
+
+			IDXGISwapChain1* pISwapChain1 = NULL;
+
+			if (pIDxgiFactory->CreateSwapChainForHwnd(pICommandQueue, Window::GetHandle(), &swapChainDesc, NULL, NULL, &pISwapChain1) == S_OK)
+			{
+				pISwapChain1->QueryInterface(__uuidof(IDXGISwapChain4), reinterpret_cast<void**>(&pISwapChain));
+
+				pISwapChain1->Release();
+			}
+			else
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to create swap chain\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC descHeap = {};
+			descHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+			descHeap.NumDescriptors = NumBuffers;
+			descHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+			descHeap.NodeMask = 0;
+
+			if (pIDevice->CreateDescriptorHeap(&descHeap, __uuidof(ID3D12DescriptorHeap), reinterpret_cast<void**>(&pIDescriptorHeap)) == S_OK)
+			{
+				DescriptorIncrement = pIDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+			}
+			else
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to create descriptor heap\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDescHandle = pIDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+			for (UINT i = 0; (Status == TRUE) && (i < NumBuffers); i++)
+			{
+				if (pISwapChain->GetBuffer(0, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&pIRenderBuffers[i])) != S_OK)
+				{
+					Status = FALSE;
+					Console::Write("Error: Could not get swap chain buffer %u\n", i);
+				}
+
+				pIDevice->CreateRenderTargetView(pIRenderBuffers[i], NULL, cpuDescHandle);
+
+				cpuDescHandle.ptr += DescriptorIncrement;
 			}
 		}
 
@@ -308,10 +404,28 @@ namespace Renderer
 
 	VOID Uninitialize(VOID)
 	{
-		if (pID3D12Device != NULL)
+		for (UINT i = 0; i < NumBuffers; i++)
 		{
-			pID3D12Device->Release();
-			pID3D12Device = NULL;
+			pIRenderBuffers[i]->Release();
+			pIRenderBuffers[i] = NULL;
+		}
+
+		if (pISwapChain != NULL)
+		{
+			pISwapChain->Release();
+			pISwapChain = NULL;
+		}
+
+		if (pICommandQueue != NULL)
+		{
+			pICommandQueue->Release();
+			pICommandQueue = NULL;
+		}
+
+		if (pIDevice != NULL)
+		{
+			pIDevice->Release();
+			pIDevice = NULL;
 		}
 
 		if (pIDxgiAdapter != NULL)
