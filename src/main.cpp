@@ -267,9 +267,16 @@ namespace Renderer
 	ID3D12DescriptorHeap*		pIDescriptorHeap = NULL;
 	ID3D12Resource*				pIRenderBuffers[NumBuffers] = { NULL, NULL };
 	ID3D12CommandAllocator*		pICommandAllocator = NULL;
+	
+	ID3D12Fence*				pIFence = NULL;
+	HANDLE						hFenceEvent = NULL;
 	ID3D12GraphicsCommandList*  pICommandList = NULL;
 
-	UINT						DescriptorIncrement = 0;
+	UINT						FrameIndex = 0;
+	UINT64                      FenceValue = 0;
+	SIZE_T						DescriptorIncrement = 0;
+
+	CONST FLOAT                 ClearColor[] = { 50.0f / 255.0f, 135.0f / 255.0f, 235.0f / 255.0f, 1.0f };
 
 	BOOL						EnumerateDxgiAdapters(VOID);
 
@@ -354,8 +361,9 @@ namespace Renderer
 			if (pIDxgiFactory->CreateSwapChainForHwnd(pICommandQueue, Window::GetHandle(), &swapChainDesc, NULL, NULL, &pISwapChain1) == S_OK)
 			{
 				pISwapChain1->QueryInterface(__uuidof(IDXGISwapChain4), reinterpret_cast<void**>(&pISwapChain));
-
 				pISwapChain1->Release();
+
+				FrameIndex = pISwapChain->GetCurrentBackBufferIndex();
 			}
 			else
 			{
@@ -389,7 +397,7 @@ namespace Renderer
 
 			for (UINT i = 0; (Status == TRUE) && (i < NumBuffers); i++)
 			{
-				if (pISwapChain->GetBuffer(0, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&pIRenderBuffers[i])) != S_OK)
+				if (pISwapChain->GetBuffer(i, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&pIRenderBuffers[i])) != S_OK)
 				{
 					Status = FALSE;
 					Console::Write("Error: Could not get swap chain buffer %u\n", i);
@@ -412,10 +420,38 @@ namespace Renderer
 
 		if (Status == TRUE)
 		{
-			if (pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, pICommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&pICommandList)) != S_OK)
+			if (pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, pICommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&pICommandList)) == S_OK)
+			{
+				pICommandList->Close();
+			}
+			else
 			{
 				Status = FALSE;
 				Console::Write("Error: Could not create command list\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			if (pIDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), reinterpret_cast<void**>(&pIFence)) == S_OK)
+			{
+				FenceValue = 1;
+			}
+			else
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not create fence\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			hFenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+			if (hFenceEvent == NULL)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not create fence event\n");
 			}
 		}
 
@@ -424,6 +460,23 @@ namespace Renderer
 
 	VOID Uninitialize(VOID)
 	{
+		if (hFenceEvent != NULL)
+		{
+			CloseHandle(hFenceEvent);
+		}
+
+		if (pIFence != NULL)
+		{
+			pIFence->Release();
+			pIFence = NULL;
+		}
+
+		if (pICommandList != NULL)
+		{
+			pICommandList->Release();
+			pICommandList = NULL;
+		}
+
 		if (pICommandAllocator != NULL)
 		{
 			pICommandAllocator->Release();
@@ -634,6 +687,118 @@ namespace Renderer
 
 		return Status;
 	}
+
+	BOOL Render(VOID)
+	{
+		BOOL Status = TRUE;
+		
+		if (pICommandAllocator->Reset() != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to reset command allocator\n");
+		}
+
+		if (Status == TRUE)
+		{
+			if (pICommandList->Reset(pICommandAllocator, NULL) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to reset command list\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			D3D12_RESOURCE_BARRIER barrier = {};
+			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier.Transition.pResource = pIRenderBuffers[FrameIndex];
+			barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+			pICommandList->ResourceBarrier(1, &barrier);
+		}
+
+		if (Status == TRUE)
+		{
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = pIDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+			rtvHandle.ptr += FrameIndex * DescriptorIncrement;
+
+			pICommandList->ClearRenderTargetView(rtvHandle, ClearColor, 0, NULL);
+		}
+
+		if (Status == TRUE)
+		{
+			D3D12_RESOURCE_BARRIER barrier = {};
+			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier.Transition.pResource = pIRenderBuffers[FrameIndex];
+			barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+
+			pICommandList->ResourceBarrier(1, &barrier);
+		}
+
+		if (Status == TRUE)
+		{
+			if (pICommandList->Close() != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not finalize command list\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			ID3D12CommandList* pICommandLists[] = { pICommandList };
+			pICommandQueue->ExecuteCommandLists(_countof(pICommandLists), pICommandLists);
+		}
+
+		if (Status == TRUE)
+		{
+			if (pISwapChain->Present(1, 0) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to present\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			if (pICommandQueue->Signal(pIFence, FenceValue) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to signal command queue fence\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			if (pIFence->GetCompletedValue() < FenceValue)
+			{
+				if (pIFence->SetEventOnCompletion(FenceValue, hFenceEvent) == S_OK)
+				{
+					WaitForSingleObject(hFenceEvent, INFINITE);
+				}
+				else
+				{
+					Status = FALSE;
+					Console::Write("Error: Failed to wait for completion fence\n");
+				}
+			}
+
+			FenceValue++;
+		}
+
+		if (Status == TRUE)
+		{
+			FrameIndex = pISwapChain->GetCurrentBackBufferIndex();
+		}
+
+		return Status;
+	}
 }
 
 BOOL Initialize(VOID)
@@ -679,7 +844,7 @@ BOOL Run(VOID)
 	BOOL Status = TRUE;
 	MSG msg = { 0 };
 
-	while (Window::Open())
+	while (Window::Open() && (Status == TRUE))
 	{
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE) != FALSE)
 		{
@@ -693,7 +858,7 @@ BOOL Run(VOID)
 		}
 		else
 		{
-			// draw
+			Status = Renderer::Render();
 		}
 	}
 
