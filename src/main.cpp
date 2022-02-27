@@ -256,21 +256,22 @@ namespace Window
 
 namespace Renderer
 {
-	CONST UINT              NumBuffers = 2;
+	CONST UINT					NumBuffers = 2;
 
-	ID3D12Debug*		    pIDebugInterface = NULL;
-	IDXGIFactory7*		    pIDxgiFactory = NULL;
-	IDXGIAdapter4*		    pIDxgiAdapter = NULL;
-	ID3D12Device*		    pIDevice = NULL;
-	ID3D12CommandQueue*     pICommandQueue = NULL;
-	IDXGISwapChain4*	    pISwapChain = NULL;
-	ID3D12DescriptorHeap*   pIDescriptorHeap = NULL;
-	ID3D12Resource*		    pIRenderBuffers[NumBuffers] = { NULL, NULL };
-	ID3D12CommandAllocator* pICommandAllocator = NULL;
+	ID3D12Debug*				pIDebugInterface = NULL;
+	IDXGIFactory7*				pIDxgiFactory = NULL;
+	IDXGIAdapter4*				pIDxgiAdapter = NULL;
+	ID3D12Device*				pIDevice = NULL;
+	ID3D12CommandQueue*			pICommandQueue = NULL;
+	IDXGISwapChain4*			pISwapChain = NULL;
+	ID3D12DescriptorHeap*		pIDescriptorHeap = NULL;
+	ID3D12Resource*				pIRenderBuffers[NumBuffers] = { NULL, NULL };
+	ID3D12CommandAllocator*		pICommandAllocator = NULL;
+	ID3D12GraphicsCommandList*  pICommandList = NULL;
 
-	UINT				    DescriptorIncrement = 0;
+	UINT						DescriptorIncrement = 0;
 
-	BOOL				    EnumerateDxgiAdapters(VOID);
+	BOOL						EnumerateDxgiAdapters(VOID);
 
 	BOOL Initialize(VOID)
 	{
@@ -406,6 +407,15 @@ namespace Renderer
 			{
 				Status = FALSE;
 				Console::Write("Error: Could not create command allocator\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			if (pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, pICommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&pICommandList)) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not create command list\n");
 			}
 		}
 
