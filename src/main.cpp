@@ -3,6 +3,7 @@
 #include <Windows.h>
 
 #include <dxgi1_6.h>
+#include <dxgidebug.h>
 #include <d3d12sdklayers.h>
 
 #include <cmath>
@@ -258,12 +259,17 @@ namespace Renderer
 {
 	CONST UINT					NumBuffers = 2;
 
-	ID3D12Debug*				pIDebugInterface = NULL;
+	HMODULE                     hDxgiDebugModule = NULL;
+	HRESULT                     (*pfnDxgiGetDebugInterface)(REFIID, VOID**);
+
+	IDXGIDebug*					pIDxgiDebugInterface = NULL;
 	IDXGIFactory7*				pIDxgiFactory = NULL;
 	IDXGIAdapter4*				pIDxgiAdapter = NULL;
+	IDXGISwapChain4*			pISwapChain = NULL;
+
+	ID3D12Debug*				pID3D12DebugInterface = NULL;
 	ID3D12Device*				pIDevice = NULL;
 	ID3D12CommandQueue*			pICommandQueue = NULL;
-	IDXGISwapChain4*			pISwapChain = NULL;
 	ID3D12DescriptorHeap*		pIDescriptorHeap = NULL;
 	ID3D12Resource*				pIRenderBuffers[NumBuffers] = { NULL, NULL };
 	ID3D12CommandAllocator*		pICommandAllocator = NULL;
@@ -284,14 +290,44 @@ namespace Renderer
 	{
 		BOOL Status = TRUE;
 
-		if (D3D12GetDebugInterface(__uuidof(ID3D12Debug), reinterpret_cast<void**>(&pIDebugInterface)) == S_OK)
+		if (D3D12GetDebugInterface(__uuidof(ID3D12Debug), reinterpret_cast<void**>(&pID3D12DebugInterface)) == S_OK)
 		{
-			pIDebugInterface->EnableDebugLayer();
+			pID3D12DebugInterface->EnableDebugLayer();
 		}
 		else
 		{
 			Status = FALSE;
-			Console::Write("Error: Failed to get debug interface\n");
+			Console::Write("Error: Failed to get dx12 debug interface\n");
+		}
+
+		if (Status == TRUE)
+		{
+			hDxgiDebugModule = GetModuleHandle("dxgidebug.dll");
+
+			if (hDxgiDebugModule != NULL)
+			{
+				pfnDxgiGetDebugInterface = reinterpret_cast<HRESULT(*)(REFIID, VOID**)>(GetProcAddress(hDxgiDebugModule, "DXGIGetDebugInterface"));
+
+				if (pfnDxgiGetDebugInterface == NULL)
+				{
+					Status = FALSE;
+					Console::Write("Error: Could not find function DXGIGetDebugInterface in the dxgi debug module\n");
+				}
+			}
+			else
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not load the dxgi debug module\n");
+			}
+		}
+
+		if (Status == TRUE)
+		{
+			if (pfnDxgiGetDebugInterface(__uuidof(IDXGIDebug), reinterpret_cast<void**>(&pIDxgiDebugInterface)) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to get dxgi debug interface\n");
+			}
 		}
 
 		if (Status == TRUE)
@@ -492,6 +528,12 @@ namespace Renderer
 			}
 		}
 
+		if (pIDescriptorHeap != NULL)
+		{
+			pIDescriptorHeap->Release();
+			pIDescriptorHeap = NULL;
+		}
+
 		if (pISwapChain != NULL)
 		{
 			pISwapChain->Release();
@@ -522,10 +564,26 @@ namespace Renderer
 			pIDxgiFactory = NULL;
 		}
 
-		if (pIDebugInterface != NULL)
+		if (pIDxgiDebugInterface != NULL)
 		{
-			pIDebugInterface->Release();
-			pIDebugInterface = NULL;
+			pIDxgiDebugInterface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
+
+			pIDxgiDebugInterface->Release();
+			pIDxgiDebugInterface = NULL;
+		}
+
+		if (hDxgiDebugModule != NULL)
+		{
+			FreeLibrary(hDxgiDebugModule);
+
+			hDxgiDebugModule = NULL;
+			pfnDxgiGetDebugInterface = NULL;
+		}
+
+		if (pID3D12DebugInterface != NULL)
+		{
+			pID3D12DebugInterface->Release();
+			pID3D12DebugInterface = NULL;
 		}
 	}
 
