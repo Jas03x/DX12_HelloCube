@@ -1,0 +1,12 @@
+#ifndef CONFIG_HPP
+#define CONFIG_HPP
+
+#include "Defines.hpp"
+
+LPCSTR CLASS_NAME = "DX12HelloCube";
+LPCSTR WINDOW_NAME = "DX12 - Hello Cube";
+
+CONST LONG WINDOW_WIDTH = 512;
+CONST LONG WINDOW_HEIGHT = 512;
+
+#endif // CONFIG_HPP
