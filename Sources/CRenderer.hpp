@@ -15,10 +15,13 @@ protected:
 
 	HWND								m_hWND;
 
+#if _DEBUG
 	HMODULE								m_hDxgiDebugModule;
 	HRESULT								(*m_pfnDxgiGetDebugInterface)(RGUID, VOID**);
 
 	class IDXGIDebug*					m_pIDxgiDebugInterface;
+#endif
+
 	class IDXGIFactory7*				m_pIDxgiFactory;
 	class IDXGIAdapter4*				m_pIDxgiAdapter;
 	class IDXGISwapChain4*				m_pISwapChain;
@@ -31,6 +34,7 @@ protected:
 	class ID3D12CommandAllocator*		m_pICommandAllocator;
 	class ID3D12GraphicsCommandList*	m_pICommandList;
 	class ID3D12Fence*					m_pIFence;
+	class ID3D12RootSignature*			m_pIRootSignature;
 
 	HANDLE								m_hFenceEvent;
 

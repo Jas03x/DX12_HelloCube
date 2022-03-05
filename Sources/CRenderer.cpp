@@ -5,6 +5,8 @@
 
 #include <dxgi1_6.h>
 #include <dxgidebug.h>
+
+#include <d3d12.h>
 #include <d3d12sdklayers.h>
 
 #include <cmath>
@@ -47,10 +49,11 @@ VOID CRenderer::Destroy(CRenderer* pRenderer)
 
 CRenderer::CRenderer()
 {
+#if _DEBUG
 	m_hDxgiDebugModule = NULL;
 	m_pfnDxgiGetDebugInterface = NULL;
-
 	m_pIDxgiDebugInterface = NULL;
+#endif
 	m_pIDxgiFactory = NULL;
 	m_pIDxgiAdapter = NULL;
 	m_pISwapChain = NULL;
@@ -82,7 +85,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	m_hWND = hWND;
 
-	if (D3D12GetDebugInterface(__uuidof(ID3D12Debug), reinterpret_cast<void**>(&m_pID3D12DebugInterface)) == S_OK)
+	if (D3D12GetDebugInterface(__uuidof(ID3D12Debug), reinterpret_cast<VOID**>(&m_pID3D12DebugInterface)) == S_OK)
 	{
 		m_pID3D12DebugInterface->EnableDebugLayer();
 	}
@@ -92,6 +95,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 		Console::Write("Error: Failed to get dx12 debug interface\n");
 	}
 
+#if _DEBUG
 	if (Status == TRUE)
 	{
 		m_hDxgiDebugModule = GetModuleHandle("dxgidebug.dll");
@@ -115,16 +119,23 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		if (m_pfnDxgiGetDebugInterface(__uuidof(IDXGIDebug), reinterpret_cast<void**>(&m_pIDxgiDebugInterface)) != S_OK)
+		if (m_pfnDxgiGetDebugInterface(__uuidof(IDXGIDebug), reinterpret_cast<VOID**>(&m_pIDxgiDebugInterface)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to get dxgi debug interface\n");
 		}
 	}
+#endif
 
 	if (Status == TRUE)
 	{
-		if (CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(IDXGIFactory7), reinterpret_cast<void**>(&m_pIDxgiFactory)) != S_OK)
+		UINT Flags = 0;
+
+#if _DEBUG
+		Flags |= DXGI_CREATE_FACTORY_DEBUG;
+#endif
+
+		if (CreateDXGIFactory2(Flags, __uuidof(IDXGIFactory7), reinterpret_cast<VOID**>(&m_pIDxgiFactory)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to create dxgi factory\n");
@@ -144,7 +155,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		D3D12CreateDevice(m_pIDxgiAdapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), reinterpret_cast<void**>(&m_pIDevice));
+		D3D12CreateDevice(m_pIDxgiAdapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), reinterpret_cast<VOID**>(&m_pIDevice));
 
 		if (m_pIDevice == NULL)
 		{
@@ -161,7 +172,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 		cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 		cmdQueueDesc.NodeMask = 0;
 
-		if (m_pIDevice->CreateCommandQueue(&cmdQueueDesc, __uuidof(ID3D12CommandQueue), reinterpret_cast<void**>(&m_pICommandQueue)) != S_OK)
+		if (m_pIDevice->CreateCommandQueue(&cmdQueueDesc, __uuidof(ID3D12CommandQueue), reinterpret_cast<VOID**>(&m_pICommandQueue)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to create command queue\n");
@@ -188,7 +199,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 		if (m_pIDxgiFactory->CreateSwapChainForHwnd(m_pICommandQueue, m_hWND, &swapChainDesc, NULL, NULL, &pISwapChain1) == S_OK)
 		{
-			pISwapChain1->QueryInterface(__uuidof(IDXGISwapChain4), reinterpret_cast<void**>(&m_pISwapChain));
+			pISwapChain1->QueryInterface(__uuidof(IDXGISwapChain4), reinterpret_cast<VOID**>(&m_pISwapChain));
 			pISwapChain1->Release();
 
 			m_FrameIndex = m_pISwapChain->GetCurrentBackBufferIndex();
@@ -208,7 +219,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 		descHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		descHeap.NodeMask = 0;
 
-		if (m_pIDevice->CreateDescriptorHeap(&descHeap, __uuidof(ID3D12DescriptorHeap), reinterpret_cast<void**>(&m_pIDescriptorHeap)) == S_OK)
+		if (m_pIDevice->CreateDescriptorHeap(&descHeap, __uuidof(ID3D12DescriptorHeap), reinterpret_cast<VOID**>(&m_pIDescriptorHeap)) == S_OK)
 		{
 			m_DescriptorIncrement = m_pIDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
@@ -225,7 +236,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 		for (UINT i = 0; (Status == TRUE) && (i < NumBuffers); i++)
 		{
-			if (m_pISwapChain->GetBuffer(i, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&m_pIRenderBuffers[i])) != S_OK)
+			if (m_pISwapChain->GetBuffer(i, __uuidof(ID3D12Resource), reinterpret_cast<VOID**>(&m_pIRenderBuffers[i])) != S_OK)
 			{
 				Status = FALSE;
 				Console::Write("Error: Could not get swap chain buffer %u\n", i);
@@ -239,7 +250,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		if (m_pIDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&m_pICommandAllocator)) != S_OK)
+		if (m_pIDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), reinterpret_cast<VOID**>(&m_pICommandAllocator)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Could not create command allocator\n");
@@ -248,7 +259,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		if (m_pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pICommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&m_pICommandList)) == S_OK)
+		if (m_pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pICommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<VOID**>(&m_pICommandList)) == S_OK)
 		{
 			m_pICommandList->Close();
 		}
@@ -283,11 +294,64 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 		}
 	}
 
+	if (Status == TRUE)
+	{
+		D3D12_ROOT_SIGNATURE_DESC desc = { };
+		desc.NumParameters = 0;
+		desc.pParameters = NULL;
+		desc.NumStaticSamplers = 0;
+		desc.pStaticSamplers = NULL;
+		desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+		ID3DBlob* pSignature = NULL;
+		ID3DBlob* pError = NULL;
+
+		if (D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &pSignature, &pError) == S_OK)
+		{
+			if (m_pIDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), __uuidof(ID3D12RootSignature), reinterpret_cast<VOID**>(&m_pIRootSignature)) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not create root signature\n");
+			}
+		}
+		else
+		{
+			Status = FALSE;
+			Console::Write("Error: Could not initialize root signature\n");
+		}
+
+		if (pSignature != NULL)
+		{
+			pSignature->Release();
+			pSignature = NULL;
+		}
+
+		if (pError != NULL)
+		{
+			pError->Release();
+			pError = NULL;
+		}
+	}
+
+	if (Status == TRUE)
+	{
+		ID3DBlob* pVertexShader = NULL;
+		ID3DBlob* pPixelShader = NULL;
+
+		
+	}
+
 	return Status;
 }
 
 VOID CRenderer::Uninitialize(VOID)
 {
+	if (m_pIRootSignature != NULL)
+	{
+		m_pIRootSignature->Release();
+		m_pIRootSignature = NULL;
+	}
+
 	if (m_hFenceEvent != NULL)
 	{
 		CloseHandle(m_hFenceEvent);
@@ -356,6 +420,7 @@ VOID CRenderer::Uninitialize(VOID)
 		m_pIDxgiFactory = NULL;
 	}
 
+#if _DEBUG
 	if (m_pIDxgiDebugInterface != NULL)
 	{
 		m_pIDxgiDebugInterface->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
@@ -371,6 +436,7 @@ VOID CRenderer::Uninitialize(VOID)
 		m_hDxgiDebugModule = NULL;
 		m_pfnDxgiGetDebugInterface = NULL;
 	}
+#endif
 
 	if (m_pID3D12DebugInterface != NULL)
 	{
@@ -495,7 +561,7 @@ BOOL CRenderer::EnumerateDxgiAdapters(VOID)
 
 	while (Status == TRUE)
 	{
-		HRESULT result = m_pIDxgiFactory->EnumAdapterByGpuPreference(uIndex, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, __uuidof(IDXGIAdapter4), reinterpret_cast<void**>(&pIAdapter));
+		HRESULT result = m_pIDxgiFactory->EnumAdapterByGpuPreference(uIndex, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, __uuidof(IDXGIAdapter4), reinterpret_cast<VOID**>(&pIAdapter));
 
 		if (result == DXGI_ERROR_NOT_FOUND)
 		{
