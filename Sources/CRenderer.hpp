@@ -1,6 +1,8 @@
 #ifndef CRENDERER_HPP
 #define CRENDERER_HPP
 
+#include <d3d12.h>
+
 #include "Defines.hpp"
 #include "IRenderer.hpp"
 
@@ -35,6 +37,12 @@ protected:
 	class ID3D12GraphicsCommandList*	m_pICommandList;
 	class ID3D12Fence*					m_pIFence;
 	class ID3D12RootSignature*			m_pIRootSignature;
+	class ID3D12PipelineState*			m_pIPipelineState;
+	class ID3D12Resource*				m_pIVertexBuffer;
+
+	D3D12_RECT							m_ScissorRect;
+	D3D12_VIEWPORT						m_Viewport;
+	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
 
 	HANDLE								m_hFenceEvent;
 
@@ -51,6 +59,11 @@ protected:
 
 	BOOL PrintAdapterDesc(UINT uIndex, IDXGIAdapter4* pIAdapter);
 	BOOL EnumerateDxgiAdapters(VOID);
+
+	BOOL CompileShaders(VOID);
+	BOOL CompileShader(LPCWSTR pFileName, LPCSTR pEntrypoint, LPCSTR pTarget, ID3DBlob** pShader);
+
+	BOOL CreateBuffers(VOID);
 
 public:
 	static CRenderer* Create(HWND hWND, ULONG Width, ULONG Height);

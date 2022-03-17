@@ -20,7 +20,7 @@ BOOL DX12_HelloCube::Run(VOID)
 
 	if (Status == TRUE)
 	{
-		App.MainLoop();
+		Status = App.MainLoop();
 	}
 	
 	App.Uninitialize();

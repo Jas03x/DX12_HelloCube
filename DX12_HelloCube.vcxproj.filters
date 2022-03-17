@@ -13,6 +13,9 @@
     <Filter Include="Includes">
       <UniqueIdentifier>{8752e616-bdfc-4485-8eec-1afa524e9213}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{3fd82eb1-b2fd-4da2-bd4f-95fedd67f03a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DX12_HelloCube\main.cpp">
@@ -68,5 +71,13 @@
     <ClInclude Include="DX12_HelloCube\Config.hpp">
       <Filter>DX12_HelloCube</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders\VertexShader.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Shaders\PixelShader.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

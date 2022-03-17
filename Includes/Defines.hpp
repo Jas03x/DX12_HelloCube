@@ -35,9 +35,10 @@ typedef unsigned long		DWORD;
 
 typedef float				FLOAT;
 
+typedef char*				PCHAR;
 typedef const char*			LPCCH;
 typedef const char*			LPCSTR;
-typedef char*				PCHAR;
+typedef const wchar_t*		LPCWSTR;
 
 typedef unsigned __int64    WPARAM;
 typedef __int64				LPARAM;

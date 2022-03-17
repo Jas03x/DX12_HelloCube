@@ -8,8 +8,10 @@
 
 #include <d3d12.h>
 #include <d3d12sdklayers.h>
+#include <d3dcompiler.h>
 
 #include <cmath>
+#include <vector>
 
 #include "Console.hpp"
 
@@ -65,6 +67,9 @@ CRenderer::CRenderer()
 	m_pIRenderBuffers[0] = NULL;
 	m_pIRenderBuffers[1] = NULL;
 	m_pICommandAllocator = NULL;
+	m_pIRootSignature = NULL;
+	m_pIPipelineState = NULL;
+	m_pIVertexBuffer = NULL;
 
 	m_pIFence = NULL;
 	m_hFenceEvent = NULL;
@@ -318,6 +323,11 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 		{
 			Status = FALSE;
 			Console::Write("Error: Could not initialize root signature\n");
+			
+			if (pError != NULL)
+			{
+				Console::Write("Error Info: %s\n", pError->GetBufferPointer());
+			}
 		}
 
 		if (pSignature != NULL)
@@ -335,10 +345,27 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		ID3DBlob* pVertexShader = NULL;
-		ID3DBlob* pPixelShader = NULL;
+		Status = CompileShaders();
+	}
 
-		
+	if (Status == TRUE)
+	{
+		Status = CreateBuffers();
+	}
+
+	if (Status == TRUE)
+	{
+		m_Viewport.TopLeftX = 0;
+		m_Viewport.TopLeftY = 0;
+		m_Viewport.Width = static_cast<float>(Width);
+		m_Viewport.Height = static_cast<float>(Height);
+		m_Viewport.MinDepth = D3D12_MIN_DEPTH;
+		m_Viewport.MaxDepth = D3D12_MAX_DEPTH;
+
+		m_ScissorRect.left = 0;
+		m_ScissorRect.top = 0;
+		m_ScissorRect.right = Width;
+		m_ScissorRect.bottom = Height;
 	}
 
 	return Status;
@@ -346,6 +373,18 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 VOID CRenderer::Uninitialize(VOID)
 {
+	if (m_pIVertexBuffer != NULL)
+	{
+		m_pIVertexBuffer->Release();
+		m_pIVertexBuffer = NULL;
+	}
+
+	if (m_pIPipelineState != NULL)
+	{
+		m_pIPipelineState->Release();
+		m_pIPipelineState = NULL;
+	}
+
 	if (m_pIRootSignature != NULL)
 	{
 		m_pIRootSignature->Release();
@@ -604,6 +643,353 @@ BOOL CRenderer::EnumerateDxgiAdapters(VOID)
 	return Status;
 }
 
+BOOL CRenderer::CompileShader(LPCWSTR pFileName, LPCSTR pEntrypoint, LPCSTR pTarget, ID3DBlob** pShader)
+{
+	BOOL Status = TRUE;
+	ID3DBlob* pError = NULL;
+	UINT Flags = 0;
+
+#if _DEBUG
+	Flags |= D3DCOMPILE_DEBUG;
+	Flags |= D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+
+	if (D3DCompileFromFile(pFileName, NULL, NULL, pEntrypoint, pTarget, Flags, 0, pShader, &pError) != S_OK)
+	{
+		Status = FALSE;
+		Console::Write("Error: Could not compile shader %s\n", pFileName);
+
+		if (pError != NULL)
+		{
+			Console::Write("Error Info: %s\n", pError->GetBufferPointer());
+		}
+	}
+
+	if (pError != NULL)
+	{
+		pError->Release();
+		pError = NULL;
+	}
+
+	return Status;
+}
+
+BOOL CRenderer::CompileShaders(VOID)
+{
+	BOOL Status = TRUE;
+	ID3DBlob* pVertexShader = NULL;
+	ID3DBlob* pPixelShader = NULL;
+
+	if (Status == TRUE)
+	{
+		if (CompileShader(L"C:/Workspace/DX12_HelloCube/Shaders/VertexShader.hlsl", "main", "vs_5_0", &pVertexShader) != TRUE)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to compile vertex shader\n");
+		}
+	}
+
+	if (Status == TRUE)
+	{
+		if (CompileShader(L"C:/Workspace/DX12_HelloCube/Shaders/PixelShader.hlsl", "main", "ps_5_0", &pPixelShader) != TRUE)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to compile pixel shader\n");
+		}
+	}
+
+	D3D12_INPUT_ELEMENT_DESC InputDescriptors[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	if (Status == TRUE)
+	{
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+
+		desc.pRootSignature = m_pIRootSignature;
+
+		desc.VS.pShaderBytecode = pVertexShader->GetBufferPointer();
+		desc.VS.BytecodeLength = pVertexShader->GetBufferSize();
+		desc.PS.pShaderBytecode = pPixelShader->GetBufferPointer();
+		desc.PS.BytecodeLength = pPixelShader->GetBufferSize();
+		desc.DS.pShaderBytecode = 0;
+		desc.DS.BytecodeLength = 0;
+		desc.HS.pShaderBytecode = 0;
+		desc.HS.BytecodeLength = 0;
+		desc.GS.pShaderBytecode = 0;
+		desc.GS.BytecodeLength = 0;
+
+		desc.StreamOutput.pSODeclaration = NULL;
+		desc.StreamOutput.NumEntries = 0;
+		desc.StreamOutput.pBufferStrides = NULL;
+		desc.StreamOutput.NumStrides = 0;
+		desc.StreamOutput.RasterizedStream = 0;
+
+		desc.BlendState.AlphaToCoverageEnable = FALSE;
+		desc.BlendState.IndependentBlendEnable = FALSE;
+		for (unsigned int i = 0; i < 8; i++)
+		{
+			desc.BlendState.RenderTarget[i].BlendEnable = FALSE;
+			desc.BlendState.RenderTarget[i].LogicOpEnable = FALSE;
+			desc.BlendState.RenderTarget[i].SrcBlend = D3D12_BLEND_ONE;
+			desc.BlendState.RenderTarget[i].DestBlend = D3D12_BLEND_ZERO;
+			desc.BlendState.RenderTarget[i].BlendOp = D3D12_BLEND_OP_ADD;
+			desc.BlendState.RenderTarget[i].SrcBlendAlpha = D3D12_BLEND_ONE;
+			desc.BlendState.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ZERO;
+			desc.BlendState.RenderTarget[i].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+			desc.BlendState.RenderTarget[i].LogicOp = D3D12_LOGIC_OP_NOOP;
+			desc.BlendState.RenderTarget[i].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+		}
+
+		desc.SampleMask = UINT_MAX;
+
+		desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+		desc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+		desc.RasterizerState.FrontCounterClockwise = FALSE;
+		desc.RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+		desc.RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+		desc.RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+		desc.RasterizerState.DepthClipEnable = TRUE;
+		desc.RasterizerState.MultisampleEnable = FALSE;
+		desc.RasterizerState.AntialiasedLineEnable = FALSE;
+		desc.RasterizerState.ForcedSampleCount = 0;
+		desc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+		desc.DepthStencilState.DepthEnable = FALSE;
+		desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+		desc.DepthStencilState.DepthFunc = static_cast<D3D12_COMPARISON_FUNC>(0);
+		desc.DepthStencilState.StencilEnable = FALSE;
+		desc.DepthStencilState.StencilReadMask = 0;
+		desc.DepthStencilState.StencilWriteMask = 0;
+		desc.DepthStencilState.FrontFace.StencilFailOp = static_cast<D3D12_STENCIL_OP>(0);
+		desc.DepthStencilState.FrontFace.StencilDepthFailOp = static_cast<D3D12_STENCIL_OP>(0);
+		desc.DepthStencilState.FrontFace.StencilPassOp = static_cast<D3D12_STENCIL_OP>(0);
+		desc.DepthStencilState.FrontFace.StencilFunc = static_cast<D3D12_COMPARISON_FUNC>(0);
+		desc.DepthStencilState.BackFace.StencilFailOp = static_cast<D3D12_STENCIL_OP>(0);
+		desc.DepthStencilState.BackFace.StencilDepthFailOp = static_cast<D3D12_STENCIL_OP>(0);
+		desc.DepthStencilState.BackFace.StencilPassOp = static_cast<D3D12_STENCIL_OP>(0);
+		desc.DepthStencilState.BackFace.StencilFunc = static_cast<D3D12_COMPARISON_FUNC>(0);
+
+		desc.InputLayout.pInputElementDescs = InputDescriptors;
+		desc.InputLayout.NumElements = _countof(InputDescriptors);
+
+		desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+		desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		
+		desc.NumRenderTargets = 1;
+		desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+
+		desc.NodeMask = 0;
+
+		desc.CachedPSO.pCachedBlob = NULL;
+		desc.CachedPSO.CachedBlobSizeInBytes = 0;
+
+		desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+		if (m_pIDevice->CreateGraphicsPipelineState(&desc, __uuidof(ID3D12PipelineState), reinterpret_cast<void**>(&m_pIPipelineState)) != S_OK)
+		{
+			Status = false;
+			Console::Write("Error: Failed to create graphics pipeline state object\n");
+		}
+	}
+
+	if (pVertexShader != NULL)
+	{
+		pVertexShader->Release();
+		pVertexShader = NULL;
+	}
+
+	if (pPixelShader != NULL)
+	{
+		pPixelShader->Release();
+		pPixelShader = NULL;
+	}
+
+	return Status;
+}
+
+BOOL CRenderer::CreateBuffers(VOID)
+{
+	BOOL Status = TRUE;
+
+	/*
+	* 
+	*		   5 _______________ 6
+	*		    /| 			   /|
+	*		   / |			  / |
+	*		  /  |			 /  |
+	*	   1 /___|__________/ 2 |
+	*		 |	 |4 	   |	|
+	*		 |   |_________|____| 7
+	*		 |	 /		   |   /
+	*		 |	/		   |  /
+	*		 | /		   | /
+	*	   0 |/____________|/ 3
+	* 
+	* 0: { -0.5, -0.5, +0.5 }
+	* 1: { -0.5, +0.5, +0.5 }
+	* 2: { +0.5, +0.5, +0.5 }
+	* 3: { +0.5, -0.5, +0.5 }
+	* 4: { -0.5, -0.5, -0.5 }
+	* 5: { -0.5, +0.5, -0.5 }
+	* 6: { +0.5, +0.5, -0.5 }
+	* 7: { +0.5, -0.5, -0.5 }
+	*/
+
+	const float Vertices[][3] =
+	{
+		{ -0.5, -0.5, +0.5 },
+		{ -0.5, +0.5, +0.5 },
+		{ +0.5, +0.5, +0.5 },
+		{ +0.5, -0.5, +0.5 },
+		{ -0.5, -0.5, -0.5 },
+		{ -0.5, +0.5, -0.5 },
+		{ +0.5, +0.5, -0.5 },
+		{ +0.5, -0.5, -0.5 }
+	};
+
+	struct Triangle
+	{
+		unsigned short Indices[6];
+		float Normal[3];
+		float Colour[3];
+	};
+
+	const Triangle Triangles[] =
+	{
+		// front
+		{
+			{
+				0, 1, 2,
+				0, 2, 3
+			},
+			{ 0.0f, 0.0f, +1.0f },
+			{ 1.0f, 0.0f,  0.0f }
+		},
+
+		// back
+		{
+			{
+				4, 5, 6,
+				4, 6, 7
+			},
+			{ 0.0f, 0.0f, -1.0f },
+			{ 0.0f, 1.0f,  0.0f }
+		},
+
+		// left
+		{
+			{
+				0, 1, 5,
+				0, 5, 4
+			},
+			{ -1.0f, 0.0f, 0.0f },
+			{  0.0f, 0.0f, 1.0f }
+		},
+
+		// right
+		{
+			{
+				3, 2, 6,
+				3, 6, 7
+			},
+			{ +1.0f, 0.0f, 0.0f },
+			{  0.5f, 0.0f, 1.0f }
+		},
+
+		// top
+		{
+			{
+				1, 2, 5,
+				2, 5, 6
+			},
+			{ 0.0f, +1.0f, 0.0f },
+			{ 1.0f,  1.0f, 0.0f }
+		},
+
+		// bottom
+		{
+			{
+				0, 3, 4,
+				3, 4, 7
+			},
+			{ 0.0f, -1.0f, 0.0f },
+			{ 1.0f,  0.0f, 1.0f }
+		}
+	};
+
+	std::vector<float> VertexArray;
+	for (unsigned int i = 0; i < _countof(Triangles); i++)
+	{
+		const Triangle& t = Triangles[i];
+		for (unsigned int j = 0; j < 6; j++)
+		{
+			VertexArray.insert(VertexArray.end(), Vertices[t.Indices[j]], Vertices[t.Indices[j]] + 3);
+			VertexArray.insert(VertexArray.end(), t.Colour, t.Colour + 3);
+		}
+	}
+
+	D3D12_HEAP_PROPERTIES hProps = {};
+	hProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+	hProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	hProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	hProps.CreationNodeMask = 1;
+	hProps.VisibleNodeMask = 1;
+
+	D3D12_RESOURCE_DESC rDesc = {};
+	rDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	rDesc.Alignment = 0;
+	rDesc.Width = sizeof(float) * VertexArray.size();
+	rDesc.Height = 1;
+	rDesc.DepthOrArraySize = 1;
+	rDesc.MipLevels = 1;
+	rDesc.Format = DXGI_FORMAT_UNKNOWN;
+	rDesc.SampleDesc.Count = 1;
+	rDesc.SampleDesc.Quality = 0;
+	rDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	rDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	if (m_pIDevice->CreateCommittedResource(&hProps, D3D12_HEAP_FLAG_NONE, &rDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&m_pIVertexBuffer)) != S_OK)
+	{
+		Status = FALSE;
+		Console::Write("Error: Failed to create vertex buffer allocation\n");
+	}
+
+	// Copy the vertex data to the allocation
+	if (Status == TRUE)
+	{
+		BYTE* pVertexData = NULL;
+
+		D3D12_RANGE range = {};
+		range.Begin = 0;
+		range.End = 0;
+
+		if (m_pIVertexBuffer->Map(0, &range, reinterpret_cast<void**>(&pVertexData)) != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to map vertex buffer allocation\n");
+		}
+
+		if (Status == TRUE)
+		{
+			CopyMemory(pVertexData, VertexArray.data(), sizeof(float)* VertexArray.size());
+			m_pIVertexBuffer->Unmap(0, NULL);
+
+			m_VertexBufferView.BufferLocation = m_pIVertexBuffer->GetGPUVirtualAddress();
+			m_VertexBufferView.SizeInBytes = sizeof(float) * VertexArray.size();
+			m_VertexBufferView.StrideInBytes = sizeof(float) * 6;
+		}
+	}
+
+	return Status;
+}
+
 BOOL CRenderer::Render(VOID)
 {
 	BOOL Status = TRUE;
@@ -625,6 +1011,13 @@ BOOL CRenderer::Render(VOID)
 
 	if (Status == TRUE)
 	{
+		m_pICommandList->SetGraphicsRootSignature(m_pIRootSignature);
+		m_pICommandList->RSSetViewports(1, &m_Viewport);
+		m_pICommandList->RSSetScissorRects(1, &m_ScissorRect);
+	}
+
+	if (Status == TRUE)
+	{
 		D3D12_RESOURCE_BARRIER barrier = {};
 		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -641,7 +1034,13 @@ BOOL CRenderer::Render(VOID)
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_pIDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 		rtvHandle.ptr += m_FrameIndex * m_DescriptorIncrement;
 
+		// Clear the screen
 		m_pICommandList->ClearRenderTargetView(rtvHandle, ClearColor, 0, NULL);
+
+		// Draw the cube
+		m_pICommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		m_pICommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+		m_pICommandList->DrawInstanced(36, 1, 0, 0);
 	}
 
 	if (Status == TRUE)
