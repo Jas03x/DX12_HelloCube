@@ -60,6 +60,8 @@ protected:
 	BOOL PrintAdapterDesc(UINT uIndex, IDXGIAdapter4* pIAdapter);
 	BOOL EnumerateDxgiAdapters(VOID);
 
+	BOOL WaitForFrame(VOID);
+
 	BOOL CompileShaders(VOID);
 	BOOL CompileShader(LPCWSTR pFileName, LPCSTR pEntrypoint, LPCSTR pTarget, ID3DBlob** pShader);
 

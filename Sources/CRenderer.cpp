@@ -264,7 +264,56 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		if (m_pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pICommandAllocator, NULL, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<VOID**>(&m_pICommandList)) == S_OK)
+		D3D12_ROOT_SIGNATURE_DESC desc = { };
+		desc.NumParameters = 0;
+		desc.pParameters = NULL;
+		desc.NumStaticSamplers = 0;
+		desc.pStaticSamplers = NULL;
+		desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+		ID3DBlob* pSignature = NULL;
+		ID3DBlob* pError = NULL;
+
+		if (D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &pSignature, &pError) == S_OK)
+		{
+			if (m_pIDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), __uuidof(ID3D12RootSignature), reinterpret_cast<VOID**>(&m_pIRootSignature)) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Could not create root signature\n");
+			}
+		}
+		else
+		{
+			Status = FALSE;
+			Console::Write("Error: Could not initialize root signature\n");
+
+			if (pError != NULL)
+			{
+				Console::Write("Error Info: %s\n", pError->GetBufferPointer());
+			}
+		}
+
+		if (pSignature != NULL)
+		{
+			pSignature->Release();
+			pSignature = NULL;
+		}
+
+		if (pError != NULL)
+		{
+			pError->Release();
+			pError = NULL;
+		}
+	}
+
+	if (Status == TRUE)
+	{
+		Status = CompileShaders();
+	}
+
+	if (Status == TRUE)
+	{
+		if (m_pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pICommandAllocator, m_pIPipelineState, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<VOID**>(&m_pICommandList)) == S_OK)
 		{
 			m_pICommandList->Close();
 		}
@@ -297,55 +346,6 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 			Status = FALSE;
 			Console::Write("Error: Could not create fence event\n");
 		}
-	}
-
-	if (Status == TRUE)
-	{
-		D3D12_ROOT_SIGNATURE_DESC desc = { };
-		desc.NumParameters = 0;
-		desc.pParameters = NULL;
-		desc.NumStaticSamplers = 0;
-		desc.pStaticSamplers = NULL;
-		desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-		ID3DBlob* pSignature = NULL;
-		ID3DBlob* pError = NULL;
-
-		if (D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &pSignature, &pError) == S_OK)
-		{
-			if (m_pIDevice->CreateRootSignature(0, pSignature->GetBufferPointer(), pSignature->GetBufferSize(), __uuidof(ID3D12RootSignature), reinterpret_cast<VOID**>(&m_pIRootSignature)) != S_OK)
-			{
-				Status = FALSE;
-				Console::Write("Error: Could not create root signature\n");
-			}
-		}
-		else
-		{
-			Status = FALSE;
-			Console::Write("Error: Could not initialize root signature\n");
-			
-			if (pError != NULL)
-			{
-				Console::Write("Error Info: %s\n", pError->GetBufferPointer());
-			}
-		}
-
-		if (pSignature != NULL)
-		{
-			pSignature->Release();
-			pSignature = NULL;
-		}
-
-		if (pError != NULL)
-		{
-			pError->Release();
-			pError = NULL;
-		}
-	}
-
-	if (Status == TRUE)
-	{
-		Status = CompileShaders();
 	}
 
 	if (Status == TRUE)
@@ -701,7 +701,7 @@ BOOL CRenderer::CompileShaders(VOID)
 	D3D12_INPUT_ELEMENT_DESC InputDescriptors[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
 	if (Status == TRUE)
@@ -935,6 +935,23 @@ BOOL CRenderer::CreateBuffers(VOID)
 		}
 	}
 
+	// DEBUG:
+	VertexArray.clear();
+	VertexArray =
+	{
+		// top
+		0.0f, 0.25f, 0.0f, // position
+		1.0f, 0.00f, 0.0f, // color
+
+		// right
+		0.25f, 0.0f, 0.0f, // position
+		0.0f, 1.0f, 0.0f,
+
+		// left
+		-0.25f, 0.0f, 0.0f, // position
+		0.0f, 0.0f, 1.0f, // color
+	};
+
 	D3D12_HEAP_PROPERTIES hProps = {};
 	hProps.Type = D3D12_HEAP_TYPE_UPLOAD;
 	hProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -987,6 +1004,11 @@ BOOL CRenderer::CreateBuffers(VOID)
 		}
 	}
 
+	if (Status == TRUE)
+	{
+		Status = WaitForFrame();
+	}
+
 	return Status;
 }
 
@@ -1002,7 +1024,7 @@ BOOL CRenderer::Render(VOID)
 
 	if (Status == TRUE)
 	{
-		if (m_pICommandList->Reset(m_pICommandAllocator, NULL) != S_OK)
+		if (m_pICommandList->Reset(m_pICommandAllocator, m_pIPipelineState) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to reset command list\n");
@@ -1034,13 +1056,16 @@ BOOL CRenderer::Render(VOID)
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_pIDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 		rtvHandle.ptr += m_FrameIndex * m_DescriptorIncrement;
 
+		m_pICommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+
 		// Clear the screen
 		m_pICommandList->ClearRenderTargetView(rtvHandle, ClearColor, 0, NULL);
 
 		// Draw the cube
 		m_pICommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		m_pICommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
-		m_pICommandList->DrawInstanced(36, 1, 0, 0);
+		//m_pICommandList->DrawInstanced(36, 1, 0, 0);
+		m_pICommandList->DrawInstanced(3, 1, 0, 0);
 	}
 
 	if (Status == TRUE)
@@ -1079,6 +1104,18 @@ BOOL CRenderer::Render(VOID)
 			Console::Write("Error: Failed to present\n");
 		}
 	}
+
+	if (Status == TRUE)
+	{
+		Status = WaitForFrame();
+	}
+
+	return Status;
+}
+
+BOOL CRenderer::WaitForFrame(VOID)
+{
+	BOOL Status = TRUE;
 
 	if (Status == TRUE)
 	{
