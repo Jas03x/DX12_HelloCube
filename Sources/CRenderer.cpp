@@ -308,11 +308,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		if (m_pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pICommandAllocator, m_pIPipelineState, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<VOID**>(&m_pICommandList)) == S_OK)
-		{
-			m_pICommandList->Close();
-		}
-		else
+		if (m_pIDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_pICommandAllocator, m_pIPipelineState, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<VOID**>(&m_pICommandList)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Could not create command list\n");
@@ -1088,21 +1084,6 @@ BOOL CRenderer::CreateBuffers(VOID)
 	// Copy the vertex data from the upload heap to the primary heap
 	if (Status == TRUE)
 	{
-		if (m_pICommandAllocator->Reset() != S_OK)
-		{
-			Status = FALSE;
-			Console::Write("Error: Failed to reset command allocator\n");
-		}
-
-		if (Status == TRUE)
-		{
-			if (m_pICommandList->Reset(m_pICommandAllocator, m_pIPipelineState) != S_OK)
-			{
-				Status = FALSE;
-				Console::Write("Error: Failed to reset command list\n");
-			}
-		}
-
 		m_pICommandList->CopyBufferRegion(m_pIVertexBuffer, 0, vertexDataUploadBuffer, 0, sizeof(float)* VertexArray.size());
 
 		if (Status == TRUE)
