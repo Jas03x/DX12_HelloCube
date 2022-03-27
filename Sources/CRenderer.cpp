@@ -1105,7 +1105,6 @@ BOOL CRenderer::CreateBuffers(VOID)
 
 		m_pICommandList->CopyBufferRegion(m_pIVertexBuffer, 0, vertexDataUploadBuffer, 0, sizeof(float)* VertexArray.size());
 
-		/*
 		if (Status == TRUE)
 		{
 			D3D12_RESOURCE_BARRIER barrier = {};
@@ -1118,7 +1117,6 @@ BOOL CRenderer::CreateBuffers(VOID)
 
 			m_pICommandList->ResourceBarrier(1, &barrier);
 		}
-		*/
 
 		if (m_pICommandList->Close() != S_OK)
 		{
