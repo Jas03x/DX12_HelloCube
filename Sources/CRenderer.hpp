@@ -1,6 +1,9 @@
 #ifndef CRENDERER_HPP
 #define CRENDERER_HPP
 
+#include <dxgi1_6.h>
+#include <dxgidebug.h>
+
 #include <d3d12.h>
 
 #include "Defines.hpp"
@@ -21,24 +24,26 @@ protected:
 	HMODULE								m_hDxgiDebugModule;
 	HRESULT								(*m_pfnDxgiGetDebugInterface)(RGUID, VOID**);
 
-	class IDXGIDebug*					m_pIDxgiDebugInterface;
+	IDXGIDebug*							m_pIDxgiDebugInterface;
 #endif
 
-	class IDXGIFactory7*				m_pIDxgiFactory;
-	class IDXGIAdapter4*				m_pIDxgiAdapter;
-	class IDXGISwapChain4*				m_pISwapChain;
+	IDXGIFactory7*						m_pIDxgiFactory;
+	IDXGIAdapter4*						m_pIDxgiAdapter;
+	IDXGISwapChain4*					m_pISwapChain;
 
-	class ID3D12Debug*					m_pID3D12DebugInterface;
-	class ID3D12Device*					m_pIDevice;
-	class ID3D12CommandQueue*			m_pICommandQueue;
-	class ID3D12DescriptorHeap*			m_pIDescriptorHeap;
-	class ID3D12Resource*				m_pIRenderBuffers[NumBuffers];
-	class ID3D12CommandAllocator*		m_pICommandAllocator;
-	class ID3D12GraphicsCommandList*	m_pICommandList;
-	class ID3D12Fence*					m_pIFence;
-	class ID3D12RootSignature*			m_pIRootSignature;
-	class ID3D12PipelineState*			m_pIPipelineState;
-	class ID3D12Resource*				m_pIVertexBuffer;
+	ID3D12Debug*						m_pID3D12DebugInterface;
+	ID3D12Device*						m_pIDevice;
+	ID3D12CommandQueue*					m_pICommandQueue;
+	ID3D12DescriptorHeap*				m_pIDescriptorHeap;
+	ID3D12Resource*						m_pIRenderBuffers[NumBuffers];
+	ID3D12CommandAllocator*				m_pICommandAllocator;
+	ID3D12GraphicsCommandList*			m_pICommandList;
+	ID3D12Fence*						m_pIFence;
+	ID3D12RootSignature*				m_pIRootSignature;
+	ID3D12PipelineState*				m_pIPipelineState;
+	ID3D12Resource*						m_pIVertexBuffer;
+	ID3D12Heap*							m_pIUploadHeap;
+	ID3D12Heap*							m_pIPrimaryHeap;
 
 	D3D12_RECT							m_ScissorRect;
 	D3D12_VIEWPORT						m_Viewport;

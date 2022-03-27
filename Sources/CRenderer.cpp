@@ -3,11 +3,6 @@
 
 #include <windows.h>
 
-#include <dxgi1_6.h>
-#include <dxgidebug.h>
-
-#include <d3d12.h>
-#include <d3d12sdklayers.h>
 #include <d3dcompiler.h>
 
 #include <cmath>
@@ -377,6 +372,18 @@ VOID CRenderer::Uninitialize(VOID)
 	{
 		m_pIVertexBuffer->Release();
 		m_pIVertexBuffer = NULL;
+	}
+
+	if (m_pIUploadHeap != NULL)
+	{
+		m_pIUploadHeap->Release();
+		m_pIUploadHeap = NULL;
+	}
+
+	if (m_pIPrimaryHeap != NULL)
+	{
+		m_pIPrimaryHeap->Release();
+		m_pIPrimaryHeap = NULL;
 	}
 
 	if (m_pIPipelineState != NULL)
@@ -952,33 +959,111 @@ BOOL CRenderer::CreateBuffers(VOID)
 		0.0f, 0.0f, 1.0f, // color
 	};
 
-	D3D12_HEAP_PROPERTIES hProps = {};
-	hProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-	hProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	hProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	hProps.CreationNodeMask = 1;
-	hProps.VisibleNodeMask = 1;
+	const uint32_t UPLOAD_HEAP_SIZE = 64 * 1024 * 1024; // 64 KB
+	const uint32_t PRIMARY_HEAP_SIZE = 64 * 1024 * 1024; // 64 KB
 
-	D3D12_RESOURCE_DESC rDesc = {};
-	rDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	rDesc.Alignment = 0;
-	rDesc.Width = sizeof(float) * VertexArray.size();
-	rDesc.Height = 1;
-	rDesc.DepthOrArraySize = 1;
-	rDesc.MipLevels = 1;
-	rDesc.Format = DXGI_FORMAT_UNKNOWN;
-	rDesc.SampleDesc.Count = 1;
-	rDesc.SampleDesc.Quality = 0;
-	rDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	rDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-	if (m_pIDevice->CreateCommittedResource(&hProps, D3D12_HEAP_FLAG_NONE, &rDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&m_pIVertexBuffer)) != S_OK)
+	if (Status == TRUE)
 	{
-		Status = FALSE;
-		Console::Write("Error: Failed to create vertex buffer allocation\n");
+		D3D12_RESOURCE_DESC uploadResourceDesc = { };
+		uploadResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		uploadResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+		uploadResourceDesc.Width = UPLOAD_HEAP_SIZE;
+		uploadResourceDesc.Height = 1;
+		uploadResourceDesc.DepthOrArraySize = 1;
+		uploadResourceDesc.MipLevels = 1;
+		uploadResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+		uploadResourceDesc.SampleDesc.Count = 1;
+		uploadResourceDesc.SampleDesc.Quality = 0;
+		uploadResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		uploadResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		D3D12_RESOURCE_ALLOCATION_INFO uploadAllocationInfo = m_pIDevice->GetResourceAllocationInfo(0, 1, &uploadResourceDesc);
+
+		D3D12_HEAP_DESC uploadHeapDesc = { };
+		uploadHeapDesc.SizeInBytes = uploadAllocationInfo.SizeInBytes;
+		uploadHeapDesc.Properties.Type = D3D12_HEAP_TYPE_UPLOAD;
+		uploadHeapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		uploadHeapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		uploadHeapDesc.Properties.CreationNodeMask = 1;
+		uploadHeapDesc.Properties.VisibleNodeMask = 1;
+
+		if (m_pIDevice->CreateHeap(&uploadHeapDesc, __uuidof(ID3D12Heap), reinterpret_cast<void**>(&m_pIUploadHeap)) != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to create upload heap\n");
+		}
 	}
 
-	// Copy the vertex data to the allocation
+	if (Status == TRUE)
+	{
+		D3D12_RESOURCE_DESC primaryResourceDesc = { };
+		primaryResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		primaryResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+		primaryResourceDesc.Width = PRIMARY_HEAP_SIZE;
+		primaryResourceDesc.Height = 1;
+		primaryResourceDesc.DepthOrArraySize = 1;
+		primaryResourceDesc.MipLevels = 1;
+		primaryResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+		primaryResourceDesc.SampleDesc.Count = 1;
+		primaryResourceDesc.SampleDesc.Quality = 0;
+		primaryResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		primaryResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		D3D12_RESOURCE_ALLOCATION_INFO primaryAllocationInfo = m_pIDevice->GetResourceAllocationInfo(0, 1, &primaryResourceDesc);
+
+		D3D12_HEAP_PROPERTIES primaryHeapProps = {};
+		primaryHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+		primaryHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		primaryHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		primaryHeapProps.CreationNodeMask = 1;
+		primaryHeapProps.VisibleNodeMask = 1;
+
+		D3D12_HEAP_DESC primaryHeapDesc = { };
+		primaryHeapDesc.SizeInBytes = primaryAllocationInfo.SizeInBytes;
+		primaryHeapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+		primaryHeapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		primaryHeapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		primaryHeapDesc.Properties.CreationNodeMask = 1;
+		primaryHeapDesc.Properties.VisibleNodeMask = 1;
+
+		if (m_pIDevice->CreateHeap(&primaryHeapDesc, __uuidof(ID3D12Heap), reinterpret_cast<void**>(&m_pIPrimaryHeap)) != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to create primary heap\n");
+		}
+	}
+
+	ID3D12Resource* vertexDataUploadBuffer = NULL;
+
+	if (Status == TRUE)
+	{
+		D3D12_RESOURCE_DESC vertexBufferDesc = {};
+		vertexBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		vertexBufferDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+		vertexBufferDesc.Width = sizeof(float) * VertexArray.size();
+		vertexBufferDesc.Height = 1;
+		vertexBufferDesc.DepthOrArraySize = 1;
+		vertexBufferDesc.MipLevels = 1;
+		vertexBufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+		vertexBufferDesc.SampleDesc.Count = 1;
+		vertexBufferDesc.SampleDesc.Quality = 0;
+		vertexBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		vertexBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		if (m_pIDevice->CreatePlacedResource(m_pIUploadHeap, 0, &vertexBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&vertexDataUploadBuffer)) != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to create vertex buffer upload allocation\n");
+		}
+
+		if (m_pIDevice->CreatePlacedResource(m_pIPrimaryHeap, 0, &vertexBufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, NULL, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&m_pIVertexBuffer)) != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to create vertex buffer primary allocation\n");
+		}
+	}
+
+	// Copy the vertex data to the upload heap
 	if (Status == TRUE)
 	{
 		BYTE* pVertexData = NULL;
@@ -987,7 +1072,7 @@ BOOL CRenderer::CreateBuffers(VOID)
 		range.Begin = 0;
 		range.End = 0;
 
-		if (m_pIVertexBuffer->Map(0, &range, reinterpret_cast<void**>(&pVertexData)) != S_OK)
+		if (vertexDataUploadBuffer->Map(0, &range, reinterpret_cast<void**>(&pVertexData)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to map vertex buffer allocation\n");
@@ -996,17 +1081,67 @@ BOOL CRenderer::CreateBuffers(VOID)
 		if (Status == TRUE)
 		{
 			CopyMemory(pVertexData, VertexArray.data(), sizeof(float)* VertexArray.size());
-			m_pIVertexBuffer->Unmap(0, NULL);
-
-			m_VertexBufferView.BufferLocation = m_pIVertexBuffer->GetGPUVirtualAddress();
-			m_VertexBufferView.SizeInBytes = sizeof(float) * VertexArray.size();
-			m_VertexBufferView.StrideInBytes = sizeof(float) * 6;
+			vertexDataUploadBuffer->Unmap(0, NULL);
 		}
+	}
+
+	// Copy the vertex data from the upload heap to the primary heap
+	if (Status == TRUE)
+	{
+		if (m_pICommandAllocator->Reset() != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Failed to reset command allocator\n");
+		}
+
+		if (Status == TRUE)
+		{
+			if (m_pICommandList->Reset(m_pICommandAllocator, m_pIPipelineState) != S_OK)
+			{
+				Status = FALSE;
+				Console::Write("Error: Failed to reset command list\n");
+			}
+		}
+
+		m_pICommandList->CopyBufferRegion(m_pIVertexBuffer, 0, vertexDataUploadBuffer, 0, sizeof(float)* VertexArray.size());
+
+		/*
+		if (Status == TRUE)
+		{
+			D3D12_RESOURCE_BARRIER barrier = {};
+			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+			barrier.Transition.pResource = m_pIVertexBuffer;
+			barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+
+			m_pICommandList->ResourceBarrier(1, &barrier);
+		}
+		*/
+
+		if (m_pICommandList->Close() != S_OK)
+		{
+			Status = FALSE;
+			Console::Write("Error: Could not finalize command list\n");
+		}
+
+		ID3D12CommandList* pICommandLists[] = { m_pICommandList };
+		m_pICommandQueue->ExecuteCommandLists(_countof(pICommandLists), pICommandLists);
+
+		m_VertexBufferView.BufferLocation = m_pIVertexBuffer->GetGPUVirtualAddress();
+		m_VertexBufferView.SizeInBytes = sizeof(float) * VertexArray.size();
+		m_VertexBufferView.StrideInBytes = sizeof(float) * 6;
 	}
 
 	if (Status == TRUE)
 	{
 		Status = WaitForFrame();
+	}
+
+	if (vertexDataUploadBuffer != NULL)
+	{
+		vertexDataUploadBuffer->Release();
 	}
 
 	return Status;
