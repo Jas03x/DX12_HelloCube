@@ -1007,13 +1007,6 @@ BOOL CRenderer::CreateBuffers(VOID)
 
 		D3D12_RESOURCE_ALLOCATION_INFO primaryAllocationInfo = m_pIDevice->GetResourceAllocationInfo(0, 1, &primaryResourceDesc);
 
-		D3D12_HEAP_PROPERTIES primaryHeapProps = {};
-		primaryHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-		primaryHeapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		primaryHeapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		primaryHeapProps.CreationNodeMask = 1;
-		primaryHeapProps.VisibleNodeMask = 1;
-
 		D3D12_HEAP_DESC primaryHeapDesc = { };
 		primaryHeapDesc.SizeInBytes = primaryAllocationInfo.SizeInBytes;
 		primaryHeapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -1086,18 +1079,15 @@ BOOL CRenderer::CreateBuffers(VOID)
 	{
 		m_pICommandList->CopyBufferRegion(m_pIVertexBuffer, 0, vertexDataUploadBuffer, 0, sizeof(float)* VertexArray.size());
 
-		if (Status == TRUE)
-		{
-			D3D12_RESOURCE_BARRIER barrier = {};
-			barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-			barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			barrier.Transition.pResource = m_pIVertexBuffer;
-			barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-			barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-			barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		D3D12_RESOURCE_BARRIER barrier = {};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		barrier.Transition.pResource = m_pIVertexBuffer;
+		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
 
-			m_pICommandList->ResourceBarrier(1, &barrier);
-		}
+		m_pICommandList->ResourceBarrier(1, &barrier);
 
 		if (m_pICommandList->Close() != S_OK)
 		{
@@ -1105,12 +1095,15 @@ BOOL CRenderer::CreateBuffers(VOID)
 			Console::Write("Error: Could not finalize command list\n");
 		}
 
-		ID3D12CommandList* pICommandLists[] = { m_pICommandList };
-		m_pICommandQueue->ExecuteCommandLists(_countof(pICommandLists), pICommandLists);
+		if (Status == TRUE)
+		{
+			ID3D12CommandList* pICommandLists[] = { m_pICommandList };
+			m_pICommandQueue->ExecuteCommandLists(_countof(pICommandLists), pICommandLists);
 
-		m_VertexBufferView.BufferLocation = m_pIVertexBuffer->GetGPUVirtualAddress();
-		m_VertexBufferView.SizeInBytes = sizeof(float) * VertexArray.size();
-		m_VertexBufferView.StrideInBytes = sizeof(float) * 6;
+			m_VertexBufferView.BufferLocation = m_pIVertexBuffer->GetGPUVirtualAddress();
+			m_VertexBufferView.SizeInBytes = sizeof(float) * VertexArray.size();
+			m_VertexBufferView.StrideInBytes = sizeof(float) * 6;
+		}
 	}
 
 	if (Status == TRUE)
