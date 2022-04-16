@@ -6,12 +6,13 @@
 
 #include <d3d12.h>
 
-#include "Defines.hpp"
+#include "CBase.hpp"
+
 #include "IRenderer.hpp"
 
 typedef const struct _GUID& RGUID;
 
-class CRenderer : public IRenderer
+class CRenderer : public IRenderer, public CBase
 {
 protected:
 	enum								{ NumBuffers = 2 };

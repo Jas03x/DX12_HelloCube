@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="DX12_HelloCube\DX12_HelloCube.cpp" />
     <ClCompile Include="DX12_HelloCube\main.cpp" />
+    <ClCompile Include="Sources\CBase.cpp" />
     <ClCompile Include="Sources\CConsole.cpp" />
     <ClCompile Include="Sources\CMemory.cpp" />
     <ClCompile Include="Sources\CRenderer.cpp" />
@@ -52,6 +53,9 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Sources\CBase.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

@@ -1,11 +1,11 @@
 #ifndef WINDOW_HPP
 #define WINDOW_HPP
 
-#include "Defines.hpp"
+#include "CBase.hpp"
 
 #include "IWindow.hpp"
 
-class CWindow : public IWindow
+class CWindow : public IWindow, public CBase
 {
 private:
 	HINSTANCE m_hInstance;

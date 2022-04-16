@@ -36,6 +36,9 @@
     <ClCompile Include="DX12_HelloCube\DX12_HelloCube.cpp">
       <Filter>DX12_HelloCube</Filter>
     </ClCompile>
+    <ClCompile Include="Sources\CBase.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Interfaces\IWindow.hpp">
@@ -79,5 +82,10 @@
     <FxCompile Include="Shaders\PixelShader.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Sources\CBase.hpp">
+      <Filter>Sources</Filter>
+    </None>
   </ItemGroup>
 </Project>
