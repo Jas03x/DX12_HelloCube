@@ -317,7 +317,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 	if (Status == TRUE)
 	{
-		if (m_pIDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), reinterpret_cast<void**>(&m_pIFence)) == S_OK)
+		if (m_pIDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), reinterpret_cast<VOID**>(&m_pIFence)) == S_OK)
 		{
 			m_FenceValue = 1;
 		}
@@ -795,7 +795,7 @@ BOOL CRenderer::CompileShaders(VOID)
 
 		desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
-		if (m_pIDevice->CreateGraphicsPipelineState(&desc, __uuidof(ID3D12PipelineState), reinterpret_cast<void**>(&m_pIPipelineState)) != S_OK)
+		if (m_pIDevice->CreateGraphicsPipelineState(&desc, __uuidof(ID3D12PipelineState), reinterpret_cast<VOID**>(&m_pIPipelineState)) != S_OK)
 		{
 			Status = false;
 			Console::Write("Error: Failed to create graphics pipeline state object\n");
@@ -983,7 +983,7 @@ BOOL CRenderer::CreateBuffers(VOID)
 		uploadHeapDesc.Properties.CreationNodeMask = 1;
 		uploadHeapDesc.Properties.VisibleNodeMask = 1;
 
-		if (m_pIDevice->CreateHeap(&uploadHeapDesc, __uuidof(ID3D12Heap), reinterpret_cast<void**>(&m_pIUploadHeap)) != S_OK)
+		if (m_pIDevice->CreateHeap(&uploadHeapDesc, __uuidof(ID3D12Heap), reinterpret_cast<VOID**>(&m_pIUploadHeap)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to create upload heap\n");
@@ -1015,7 +1015,7 @@ BOOL CRenderer::CreateBuffers(VOID)
 		primaryHeapDesc.Properties.CreationNodeMask = 1;
 		primaryHeapDesc.Properties.VisibleNodeMask = 1;
 
-		if (m_pIDevice->CreateHeap(&primaryHeapDesc, __uuidof(ID3D12Heap), reinterpret_cast<void**>(&m_pIPrimaryHeap)) != S_OK)
+		if (m_pIDevice->CreateHeap(&primaryHeapDesc, __uuidof(ID3D12Heap), reinterpret_cast<VOID**>(&m_pIPrimaryHeap)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to create primary heap\n");
@@ -1039,13 +1039,13 @@ BOOL CRenderer::CreateBuffers(VOID)
 		vertexBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 		vertexBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-		if (m_pIDevice->CreatePlacedResource(m_pIUploadHeap, 0, &vertexBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&vertexDataUploadBuffer)) != S_OK)
+		if (m_pIDevice->CreatePlacedResource(m_pIUploadHeap, 0, &vertexBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, __uuidof(ID3D12Resource), reinterpret_cast<VOID**>(&vertexDataUploadBuffer)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to create vertex buffer upload allocation\n");
 		}
 
-		if (m_pIDevice->CreatePlacedResource(m_pIPrimaryHeap, 0, &vertexBufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, NULL, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&m_pIVertexBuffer)) != S_OK)
+		if (m_pIDevice->CreatePlacedResource(m_pIPrimaryHeap, 0, &vertexBufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, NULL, __uuidof(ID3D12Resource), reinterpret_cast<VOID**>(&m_pIVertexBuffer)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to create vertex buffer primary allocation\n");
@@ -1061,7 +1061,7 @@ BOOL CRenderer::CreateBuffers(VOID)
 		range.Begin = 0;
 		range.End = 0;
 
-		if (vertexDataUploadBuffer->Map(0, &range, reinterpret_cast<void**>(&pVertexData)) != S_OK)
+		if (vertexDataUploadBuffer->Map(0, &range, reinterpret_cast<VOID**>(&pVertexData)) != S_OK)
 		{
 			Status = FALSE;
 			Console::Write("Error: Failed to map vertex buffer allocation\n");
