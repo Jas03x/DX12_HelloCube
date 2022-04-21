@@ -54,7 +54,7 @@ protected:
 
 	UINT								m_FrameIndex;
 	UINT64								m_FenceValue;
-	SIZE_T								m_DescriptorIncrement;
+	SIZE_T								m_RtvDescriptorIncrement;
 
 protected:
 	CRenderer();

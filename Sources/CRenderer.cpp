@@ -72,7 +72,7 @@ CRenderer::CRenderer()
 
 	m_FrameIndex = 0;
 	m_FenceValue = 0;
-	m_DescriptorIncrement = 0;
+	m_RtvDescriptorIncrement = 0;
 }
 
 CRenderer::~CRenderer()
@@ -221,7 +221,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 		if (m_pIDevice->CreateDescriptorHeap(&descHeap, __uuidof(ID3D12DescriptorHeap), reinterpret_cast<VOID**>(&m_pIDescriptorHeap)) == S_OK)
 		{
-			m_DescriptorIncrement = m_pIDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+			m_RtvDescriptorIncrement = m_pIDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		}
 		else
 		{
@@ -244,7 +244,7 @@ BOOL CRenderer::Initialize(HWND hWND, ULONG Width, ULONG Height)
 
 			m_pIDevice->CreateRenderTargetView(m_pIRenderBuffers[i], NULL, cpuDescHandle);
 
-			cpuDescHandle.ptr += m_DescriptorIncrement;
+			cpuDescHandle.ptr += m_RtvDescriptorIncrement;
 		}
 	}
 
@@ -1069,7 +1069,7 @@ BOOL CRenderer::CreateBuffers(VOID)
 
 		if (Status == TRUE)
 		{
-			CopyMemory(pVertexData, VertexArray.data(), sizeof(float)* VertexArray.size());
+			CopyMemory(pVertexData, VertexArray.data(), sizeof(float) * VertexArray.size());
 			vertexDataUploadBuffer->Unmap(0, NULL);
 		}
 	}
@@ -1077,7 +1077,7 @@ BOOL CRenderer::CreateBuffers(VOID)
 	// Copy the vertex data from the upload heap to the primary heap
 	if (Status == TRUE)
 	{
-		m_pICommandList->CopyBufferRegion(m_pIVertexBuffer, 0, vertexDataUploadBuffer, 0, sizeof(float)* VertexArray.size());
+		m_pICommandList->CopyBufferRegion(m_pIVertexBuffer, 0, vertexDataUploadBuffer, 0, sizeof(float) * VertexArray.size());
 
 		D3D12_RESOURCE_BARRIER barrier = {};
 		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1161,7 +1161,7 @@ BOOL CRenderer::Render(VOID)
 	if (Status == TRUE)
 	{
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_pIDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-		rtvHandle.ptr += m_FrameIndex * m_DescriptorIncrement;
+		rtvHandle.ptr += m_FrameIndex * m_RtvDescriptorIncrement;
 
 		m_pICommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
